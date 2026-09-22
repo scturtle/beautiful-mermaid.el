@@ -1764,7 +1764,11 @@ The diagram is displayed in the buffer *mermaid-ascii*."
           (setq art (mapconcat (lambda (l) (concat (make-string col ?\s) l))
                                (split-string art "\n") "\n")))))
     (overlay-put ov 'beautiful-mermaid t)
-    (overlay-put ov 'display (propertize art 'face 'fixed-pitch))
+    ;; end the display with a newline: the overlay covers the
+    ;; "#+end_src" line terminator, so without a trailing newline the
+    ;; text after the block would continue on the art's last line
+    (overlay-put ov 'display
+                 (propertize (concat art "\n") 'face 'fixed-pitch))
     (let ((map (make-sparse-keymap)))
       (define-key map [mouse-1] #'beautiful-mermaid-org-toggle)
       (overlay-put ov 'local-map map))

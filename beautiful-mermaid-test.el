@@ -664,6 +664,37 @@ again restores the source."
     (beautiful-mermaid-org-toggle '(4))
     (should (null (bm-test--art-overlays)))))
 
+(ert-deftest bm-test-org-toggle-block-keeps-following-text-on-next-line ()
+  "The overlay swallows the \"#+end_src\" line terminator, so the
+display string must end with a newline -- otherwise the text after
+the block continues on the art's last line."
+  (with-temp-buffer
+    (org-mode)
+    (insert "#+begin_src mermaid\n"
+            "  graph TD\n"
+            "    X[Source] --> Y[Art]\n"
+            "#+end_src\n"
+            "\n"
+            "blabla\n")
+    (goto-char (point-min))
+    (search-forward "Source")
+    (beautiful-mermaid-org-toggle)
+    (let ((ovs (bm-test--art-overlays)))
+      (should (= 1 (length ovs)))
+      (let ((disp (overlay-get (car ovs) 'display)))
+        (should (stringp disp))
+        (should (string-suffix-p "\n" disp))))
+    ;; and the text after the block is still a separate line
+    (should (equal "blabla" (buffer-substring-no-properties
+                             (save-excursion
+                               (goto-char (point-max))
+                               (search-backward "blabla")
+                               (line-beginning-position))
+                             (save-excursion
+                               (goto-char (point-max))
+                               (search-backward "blabla")
+                               (line-end-position)))))))
+
 (ert-deftest bm-test-org-toggle-outside-block-errors ()
   (with-temp-buffer
     (org-mode)
