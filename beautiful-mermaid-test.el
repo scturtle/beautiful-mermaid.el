@@ -27,11 +27,13 @@
 ;;   M-x load-file RET beautiful-mermaid-test.el RET
 ;;   M-x ert RET RET          ; run everything
 ;;
-;; The goldens in group D were captured from outputs that matched the
+;; The goldens in group B were captured from outputs that matched the
 ;; TypeScript renderer (src/ascii) character for character, after
-;; normalizing the four arrow glyphs outside the covered font set
-;; (unicode.txt): ► ◄ -> -> <-,  ◤◥◣◢ -> ↖↗↘↙.  They lock both the
-;; Elisp implementation and the TS correspondence.
+;; replacing the arrow glyphs that fall outside the covered font set
+;; (unicode.txt): ► ◄ -> ▶ ◀ (▲▼ stay, the TS renderer already draws
+;; them), and the diagonal triangles ◤◥◣◢ -> ↖↗↘↙ (no solid diagonals
+;; in the covered set).  They lock both the Elisp implementation and
+;; the TS correspondence.
 
 ;;; Code:
 
@@ -61,9 +63,11 @@
 ;;; ---------------------------------------------------------------------------
 
 (defun bm-test--render (src &optional profile)
-  "Render SRC under PROFILE (default `full'), thin arrows."
+  "Render SRC under PROFILE (default `full') with triangle arrows
+(the default `bm-arrow-style': solid triangles stay closest to the
+TS renderer's solid arrow family)."
   (let ((bm-char-profile (or profile 'full))
-        (bm-arrow-style 'arrow))
+        (bm-arrow-style 'triangle))
     (beautiful-mermaid-render src)))
 
 (defun bm-test--lines (s)
@@ -103,15 +107,15 @@ This mirrors the BT pipeline's final step; used to pin the invariant
 (defun bm-test--arrowhead-count (out)
   "Count thin arrowheads of any direction in OUT."
   (apply #'+ (mapcar (lambda (ch) (cl-count ch out))
-                     '(?↑ ?↓ ?← ?→ ?↖ ?↗ ?↘ ?↙))))
+                     '(?↑ ?↓ ?← ?→ ?▲ ?▼ ?◀ ?▶ ?↖ ?↗ ?↘ ?↙))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; A. Rendering behavior
 ;;; ---------------------------------------------------------------------------
 
 (ert-deftest bm-test-render-td-vs-lr-arrows ()
-  (should (string-match-p "↓" (bm-test--render "graph TD\n  A --> B")))
-  (should (string-match-p "→" (bm-test--render "graph LR\n  A --> B"))))
+  (should (string-match-p "▼" (bm-test--render "graph TD\n  A --> B")))
+  (should (string-match-p "▶" (bm-test--render "graph LR\n  A --> B"))))
 
 (ert-deftest bm-test-render-lines-are-rectangular ()
   (dolist (src '("graph TD\n  A --> B --> C"
@@ -184,8 +188,8 @@ direction characters remapped (bends, box starts, arrowheads)."
 
 (ert-deftest bm-test-render-bidirectional ()
   (let ((out (bm-test--render "graph LR\n  A <--> B")))
-    (should (string-match-p "→" out))
-    (should (string-match-p "←" out))))
+    (should (string-match-p "▶" out))
+    (should (string-match-p "◀" out))))
 
 (ert-deftest bm-test-render-multiline-label ()
   (let* ((out (bm-test--render "graph TD\n  A[\"alpha<br>beta\"] --> B[x]"))
@@ -281,35 +285,40 @@ lines, black pointers, diagonal triangles, or unsupported markers."
     (should (string-match-p "┆" out))     ; dotted line (vertical in TD)
     (should (string-match-p "┃" out))))   ; thick line (vertical in TD)
 
-(ert-deftest bm-test-render-triangle-arrow-style ()
-  ;; bind both variables around the raw entry point: the helper
-  ;; would shadow bm-arrow-style with its own binding
-  (let ((out (let ((bm-char-profile 'safe)
-                   (bm-arrow-style 'triangle))
+(ert-deftest bm-test-render-arrow-style-option ()
+  "`triangle' is the default; the `arrow' option switches to thin
+arrowheads in every direction."
+  (let ((out (let ((bm-char-profile 'safe))
                (beautiful-mermaid-render "graph LR\n  A --> B --> C"))))
     (should (string-match-p "▶" out))
-    (should-not (string-match-p "→" out))))
+    (should-not (string-match-p "→" out)))
+  (let ((out (let ((bm-char-profile 'safe)
+                   (bm-arrow-style 'arrow))
+               (beautiful-mermaid-render "graph LR\n  A --> B --> C"))))
+    (should (string-match-p "→" out))
+    (should-not (string-match-p "▶" out))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; B. Byte-exact goldens: all 27 TS-verified diagrams (regression locks)
 ;;; ---------------------------------------------------------------------------
 ;; Every constant below is the exact renderer output for the diagram in
 ;; the corresponding test.  All of them matched the TypeScript renderer
-;; (src/ascii) byte for byte with the full profile, after normalizing
-;; the four arrow glyphs outside the covered font set (unicode.txt):
-;; ► ◄ -> -> <-,  ◤◥◣◢ -> ↖↗↘↙.  Any change in layout, routing, or
-;; drawing breaks these tests on purpose.  Together the diagrams cover:
-;; every node shape, every line style, edge labels in both syntaxes,
-;; bidirectional and open edges, chains, cycles, self loops, back
-;; edges, fan-in and fan-out bundling (solid, dotted and thick),
-;; label-blocks-bundling, the flowchart keyword, multi-line labels,
-;; node groups (ampersand), multi-root and standalone graphs,
-;; skip-level edges, LR edge labels, collision shifting (deep tree),
-;; the RL and BT directions, and CJK width handling (safe profile,
-;; last case).
+;; (src/ascii) byte for byte with the full profile, after replacing the
+;; arrow glyphs that fall outside the covered font set (unicode.txt):
+;; ► ◄ -> ▶ ◀ (▲▼ stay, the TS renderer already draws them), and the
+;; diagonal triangles ◤◥◣◢ -> ↖↗↘↙ (no solid diagonals in the covered
+;; set).  Any change in layout, routing, or drawing breaks these tests
+;; on purpose.  Together the diagrams cover: every node shape, every
+;; line style, edge labels in both syntaxes, bidirectional and open
+;; edges, chains, cycles, self loops, back edges, fan-in and fan-out
+;; bundling (solid, dotted and thick), label-blocks-bundling, the
+;; flowchart keyword, multi-line labels, node groups (ampersand),
+;; multi-root and standalone graphs, skip-level edges, LR edge labels,
+;; collision shifting (deep tree), the RL and BT directions, and CJK
+;; width handling (safe profile, last case).
 
 (defconst bm-test--golden-all-shapes
-  "                                                                                                                                                                                                              \n┌───────────┐     ╭─────────╮     ◇─────────◇      (──────────)     ◯────────◯      ╟─────────────╢     ◎───────────────◎     ⌜─────────⌝     ╭──────────╮     ▷──────┐     /───────────\\     ┌──────────────┐\n│           │     │         │     │         │      │          │     │        │      │             │     │               │     │         │     │          │     │      │     │           │     │              │\n│ Rectangle ├────→│ Rounded ├────→│ Diamond ├─────→│ Stadium  ├────→│ Circle ├─────→│  Subroutine ├────→│ Double Circle ├────→│ Hexagon ├────→│ Database ├────→│ Flag ├────→│ Trapezoid ├────→│ Inverse Trap │\n│           │     │         │     │         │      │          │     │        │      │             │     │               │     │         │     │          │     │      │     │           │     │              │\n│           │     │         │     │         │      │          │     │        │      │             │     │               │     │         │     │          │     │      │     │           │     │              │\n└───────────┘     ╰─────────╯     ◇─────────◇      (──────────)     ◯────────◯      ╟─────────────╢     ◎───────────────◎     ⌞─────────⌟     ╰──────────╯     ▷──────┘     └───────────┘     \\──────────────/")
+  "                                                                                                                                                                                                              \n┌───────────┐     ╭─────────╮     ◇─────────◇      (──────────)     ◯────────◯      ╟─────────────╢     ◎───────────────◎     ⌜─────────⌝     ╭──────────╮     ▷──────┐     /───────────\\     ┌──────────────┐\n│           │     │         │     │         │      │          │     │        │      │             │     │               │     │         │     │          │     │      │     │           │     │              │\n│ Rectangle ├────▶│ Rounded ├────▶│ Diamond ├─────▶│ Stadium  ├────▶│ Circle ├─────▶│  Subroutine ├────▶│ Double Circle ├────▶│ Hexagon ├────▶│ Database ├────▶│ Flag ├────▶│ Trapezoid ├────▶│ Inverse Trap │\n│           │     │         │     │         │      │          │     │        │      │             │     │               │     │         │     │          │     │      │     │           │     │              │\n│           │     │         │     │         │      │          │     │        │      │             │     │               │     │         │     │          │     │      │     │           │     │              │\n└───────────┘     ╰─────────╯     ◇─────────◇      (──────────)     ◯────────◯      ╟─────────────╢     ◎───────────────◎     ⌞─────────⌟     ╰──────────╯     ▷──────┘     └───────────┘     \\──────────────/")
 
 (ert-deftest bm-test-golden-all-shapes ()
   "all 12 node shapes chained (LR)."
@@ -319,7 +328,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-back-edge
-  "┌───┐          \n│   │          \n│ A │←─┐       \n│   │  │       \n└───┘  │       \n  │    │       \n  │    │       \n  ├────┼────┐  \n  │    │    │  \n  ↓    │    ↓  \n┌───┐  │  ┌───┐\n│   │  │  │   │\n│ B │  │  │ D │\n│   │  │  │   │\n└─┬─┘  │  └───┘\n  │    │       \n  │    │       \n  │    │       \n  │    │       \n  ↓    │       \n┌───┐  │       \n│   │  │       \n│ C ├──┘       \n│   │          \n└───┘          ")
+  "┌───┐          \n│   │          \n│ A │◀─┐       \n│   │  │       \n└───┘  │       \n  │    │       \n  │    │       \n  ├────┼────┐  \n  │    │    │  \n  ▼    │    ▼  \n┌───┐  │  ┌───┐\n│   │  │  │   │\n│ B │  │  │ D │\n│   │  │  │   │\n└─┬─┘  │  └───┘\n  │    │       \n  │    │       \n  │    │       \n  │    │       \n  ▼    │       \n┌───┐  │       \n│   │  │       \n│ C ├──┘       \n│   │          \n└───┘          ")
 
 (ert-deftest bm-test-golden-back-edge ()
   "back edge C --> A plus a forward edge (TD)."
@@ -329,7 +338,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-bidi
-  "┌────────┐      ┌────────┐           ┌─────────┐      ┌─────────┐\n│        │      │        │           │         │      │         │\n│ Client ←sync─→│ Server ←┄heartbeat→│ Monitor ←data━→│ Storage │\n│        │      │        │           │         │      │         │\n└────────┘      └────────┘           └─────────┘      └─────────┘")
+  "┌────────┐      ┌────────┐           ┌─────────┐      ┌─────────┐\n│        │      │        │           │         │      │         │\n│ Client ◀sync─▶│ Server ◀┄heartbeat▶│ Monitor ◀data━▶│ Storage │\n│        │      │        │           │         │      │         │\n└────────┘      └────────┘           └─────────┘      └─────────┘")
 
 (ert-deftest bm-test-golden-bidi ()
   "bidirectional labelled edges in all three styles (LR)."
@@ -339,7 +348,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-bt-flow
-  "┌───────┐     ┌──────┐\n│       │     │      │\n│   Go  │     │ Stop │\n│       │     │      │\n└───────┘     └──────┘\n    ↑             ↑   \n    │             │   \n    │             │   \n   yes            │   \n    │             │   \n◇───┴───◇        no   \n│       │         │   \n│   Q   ├─────────┘   \n│       │             \n◇───────◇             \n    ↑                 \n    │                 \n    │                 \n    │                 \n    │                 \n┌───┴───┐             \n│       │             \n│ Start │             \n│       │             \n└───────┘             ")
+  "┌───────┐     ┌──────┐\n│       │     │      │\n│   Go  │     │ Stop │\n│       │     │      │\n└───────┘     └──────┘\n    ▲             ▲   \n    │             │   \n    │             │   \n   yes            │   \n    │             │   \n◇───┴───◇        no   \n│       │         │   \n│   Q   ├─────────┘   \n│       │             \n◇───────◇             \n    ▲                 \n    │                 \n    │                 \n    │                 \n    │                 \n┌───┴───┐             \n│       │             \n│ Start │             \n│       │             \n└───────┘             ")
 
 (ert-deftest bm-test-golden-bt-flow ()
   "BT direction: labelled branch (verifies the vertical flip against TS)."
@@ -349,7 +358,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-chain
-  "┌───┐     ┌───┐     ┌───┐     ┌───┐\n│   │     │   │     │   │     │   │\n│ A ├────→│ B ├────→│ C ├────→│ D │\n│   │     │   │     │   │     │   │\n└───┘     └───┘     └───┘     └───┘")
+  "┌───┐     ┌───┐     ┌───┐     ┌───┐\n│   │     │   │     │   │     │   │\n│ A ├────▶│ B ├────▶│ C ├────▶│ D │\n│   │     │   │     │   │     │   │\n└───┘     └───┘     └───┘     └───┘")
 
 (ert-deftest bm-test-golden-chain ()
   "plain four-node chain (LR)."
@@ -359,7 +368,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-cross-level
-  "┌───┐     ┌───┐\n│   │     │   │\n│ A ├────→│ B │\n│   │     │   │\n└─┬─┘     └─┬─┘\n  │         │  \n  │         │  \n  │         │  \n  │         │  \n  │         ↓  \n  │       ┌───┐\n  │       │   │\n  └──────→│ C │\n          │   │\n          └───┘")
+  "┌───┐     ┌───┐\n│   │     │   │\n│ A ├────▶│ B │\n│   │     │   │\n└─┬─┘     └─┬─┘\n  │         │  \n  │         │  \n  │         │  \n  │         │  \n  │         ▼  \n  │       ┌───┐\n  │       │   │\n  └──────▶│ C │\n          │   │\n          └───┘")
 
 (ert-deftest bm-test-golden-cross-level ()
   "skip-level edge A --> C alongside A --> B --> C (LR)."
@@ -369,7 +378,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-cycle
-  "┌───┐     ┌───┐     ┌───┐\n│   │     │   │     │   │\n│ A ├────→│ B ├────→│ C │\n│   │     │   │     │   │\n└───┘     └───┘     └─┬─┘\n  ↑                   │  \n  └───────────────────┘  ")
+  "┌───┐     ┌───┐     ┌───┐\n│   │     │   │     │   │\n│ A ├────▶│ B ├────▶│ C │\n│   │     │   │     │   │\n└───┘     └───┘     └─┬─┘\n  ▲                   │  \n  └───────────────────┘  ")
 
 (ert-deftest bm-test-golden-cycle ()
   "three-node cycle (LR)."
@@ -379,7 +388,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-deep-tree
-  "┌──────┐                              \n│      │                              \n│ Root │                              \n│      │                              \n└──────┘                              \n    │                                 \n    │                                 \n    ├──────────┐                      \n    │          │                      \n    ↓          ↓                      \n┌──────┐     ┌───┐                    \n│      │     │   │                    \n│  B   │     │ C │                    \n│      │     │   │                    \n└──────┘     └───┘                    \n    │          │                      \n    │          │                      \n    ├──────────┼─────────┬─────────┐  \n    │          │         │         │  \n    ↓          ↓         ↓         ↓  \n┌──────┐     ┌───┐     ┌───┐     ┌───┐\n│      │     │   │     │   │     │   │\n│  D   │     │ E │     │ F │     │ G │\n│      │     │   │     │   │     │   │\n└──────┘     └───┘     └───┘     └───┘")
+  "┌──────┐                              \n│      │                              \n│ Root │                              \n│      │                              \n└──────┘                              \n    │                                 \n    │                                 \n    ├──────────┐                      \n    │          │                      \n    ▼          ▼                      \n┌──────┐     ┌───┐                    \n│      │     │   │                    \n│  B   │     │ C │                    \n│      │     │   │                    \n└──────┘     └───┘                    \n    │          │                      \n    │          │                      \n    ├──────────┼─────────┬─────────┐  \n    │          │         │         │  \n    ▼          ▼         ▼         ▼  \n┌──────┐     ┌───┐     ┌───┐     ┌───┐\n│      │     │   │     │   │     │   │\n│  D   │     │ E │     │ F │     │ G │\n│      │     │   │     │   │     │   │\n└──────┘     └───┘     └───┘     └───┘")
 
 (ert-deftest bm-test-golden-deep-tree ()
   "two-level binary tree via node groups; collision shifting (TD)."
@@ -389,7 +398,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-diamond
-  "┌────────┐             \n│        │             \n│ Start  │             \n│        │             \n└────┬───┘             \n     │                 \n     │                 \n     ├──────┐          \n     │      │          \n     ↓      │          \n◇────────◇  │          \n│        │  │          \n│ Check  ├──┼──────┐   \n│        │  │      │   \n◇────┬───◇  │    fail  \n     │      │      │   \n   pass     │      │   \n     │      │      │   \n     │      │      │   \n     ↓      │      ↓   \n┌────────┐  │  ┌──────┐\n│        │  │  │      │\n│ Deploy │  │  │ Fix  │\n│        │  │  │      │\n└────────┘  │  └───┬──┘\n            │      │   \n            └──────┘   ")
+  "┌────────┐             \n│        │             \n│ Start  │             \n│        │             \n└────┬───┘             \n     │                 \n     │                 \n     ├──────┐          \n     │      │          \n     ▼      │          \n◇────────◇  │          \n│        │  │          \n│ Check  ├──┼──────┐   \n│        │  │      │   \n◇────┬───◇  │    fail  \n     │      │      │   \n   pass     │      │   \n     │      │      │   \n     │      │      │   \n     ▼      │      ▼   \n┌────────┐  │  ┌──────┐\n│        │  │  │      │\n│ Deploy │  │  │ Fix  │\n│        │  │  │      │\n└────────┘  │  └───┬──┘\n            │      │   \n            └──────┘   ")
 
 (ert-deftest bm-test-golden-diamond ()
   "labelled branch with back edge; fan-in and fan-out bundling (TD)."
@@ -399,7 +408,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-diamonds2
-  " (────────────)              \n │            │              \n │  Kickoff   │              \n │            │              \n (──────┬─────)              \n       │                     \n       │                     \n       ├─────────┐           \n       │         │           \n       │↓        │           \n ◇────────────◇  │           \n │            │  │           \n │ All good?  ├──┼──────┐    \n │            │  │      │    \n ◇─────┬──────◇  │     no    \n       │         │      │    \n      yes        │      │    \n       │         │      │    \n       │         │      │    \n       ↓         │      ↓    \n ┌────────────┐  │  ┌───────┐\n │            │  │  │       │\n │  Validate  │  │  │ Retry │\n │            │  │  │       │\n └────────────┘  │  └───┬───┘\n                 │      │    \n                 └──────┘    ")
+  " (────────────)              \n │            │              \n │  Kickoff   │              \n │            │              \n (──────┬─────)              \n       │                     \n       │                     \n       ├─────────┐           \n       │         │           \n       │▼        │           \n ◇────────────◇  │           \n │            │  │           \n │ All good?  ├──┼──────┐    \n │            │  │      │    \n ◇─────┬──────◇  │     no    \n       │         │      │    \n      yes        │      │    \n       │         │      │    \n       │         │      │    \n       ▼         │      ▼    \n ┌────────────┐  │  ┌───────┐\n │            │  │  │       │\n │  Validate  │  │  │ Retry │\n │            │  │  │       │\n └────────────┘  │  └───┬───┘\n                 │      │    \n                 └──────┘    ")
 
 (ert-deftest bm-test-golden-diamonds2 ()
   "flowchart keyword, stadium/diamond nodes, back edge (TD)."
@@ -409,7 +418,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-dotted-bundle
-  "┌──────┐     ┌───┐     ┌───┐\n│      │     │   │     │   │\n│  A   │     │ B │     │ C │\n│      │     │   │     │   │\n└───┬──┘     └─┬─┘     └─┬─┘\n    ┆          ┆         ┆  \n    ┆          ┆         ┆  \n    ├┄┄┄┄┄┄┄┄┄┄┘┄┄┄┄┄┄┄┄┄┘  \n    ┆                       \n    ↓                       \n┌──────┐                    \n│      │                    \n│ Done │                    \n│      │                    \n└──────┘                    ")
+  "┌──────┐     ┌───┐     ┌───┐\n│      │     │   │     │   │\n│  A   │     │ B │     │ C │\n│      │     │   │     │   │\n└───┬──┘     └─┬─┘     └─┬─┘\n    ┆          ┆         ┆  \n    ┆          ┆         ┆  \n    ├┄┄┄┄┄┄┄┄┄┄┘┄┄┄┄┄┄┄┄┄┘  \n    ┆                       \n    ▼                       \n┌──────┐                    \n│      │                    \n│ Done │                    \n│      │                    \n└──────┘                    ")
 
 (ert-deftest bm-test-golden-dotted-bundle ()
   "three dotted edges fan-in into one node (TD)."
@@ -419,7 +428,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-label-vs-bundle
-  "┌──────┐     ┌───┐\n│      │     │   │\n│  A   │     │ B │\n│      │     │   │\n└───┬──┘     └─┬─┘\n    │          │  \n    x          │  \n    │          │  \n    │          │  \n    ↓          │  \n┌──────┐       │  \n│      │       │  \n│ Done │←──────┘  \n│      │          \n└──────┘          ")
+  "┌──────┐     ┌───┐\n│      │     │   │\n│  A   │     │ B │\n│      │     │   │\n└───┬──┘     └─┬─┘\n    │          │  \n    x          │  \n    │          │  \n    │          │  \n    ▼          │  \n┌──────┐       │  \n│      │       │  \n│ Done │◀──────┘  \n│      │          \n└──────┘          ")
 
 (ert-deftest bm-test-golden-label-vs-bundle ()
   "a labelled edge does not bundle: separate arrowheads (TD)."
@@ -429,7 +438,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-labels
-  "◇──────────◇             \n│          │             \n│ Decision ├─────────┐   \n│          │         │   \n◇─────┬────◇        No   \n      │              │   \n     Yes             │   \n      │              │   \n      │              │   \n      ↓              ↓   \n┌──────────┐     ┌──────┐\n│          │     │      │\n│  Action  │     │ Skip │\n│          │     │      │\n└─────┬────┘     └──────┘\n      │                  \n      │                  \n      │                  \n      │                  \n      ↓                  \n◯──────────◯             \n│          │             \n│   End    │             \n│          │             \n◯──────────◯             ")
+  "◇──────────◇             \n│          │             \n│ Decision ├─────────┐   \n│          │         │   \n◇─────┬────◇        No   \n      │              │   \n     Yes             │   \n      │              │   \n      │              │   \n      ▼              ▼   \n┌──────────┐     ┌──────┐\n│          │     │      │\n│  Action  │     │ Skip │\n│          │     │      │\n└─────┬────┘     └──────┘\n      │                  \n      │                  \n      │                  \n      │                  \n      ▼                  \n◯──────────◯             \n│          │             \n│   End    │             \n│          │             \n◯──────────◯             ")
 
 (ert-deftest bm-test-golden-labels ()
   "diamond source with two labelled edges, circle target (TD)."
@@ -439,7 +448,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-lr-labels
-  "┌───┐       ┌───┐     ┌───┐      ┌─────┐\n│   │       │   │     │   │      │     │\n│ A ├─first→│ B ├────→│ C ├slow┄→│ End │\n│   │       │   │     │   │      │     │\n└───┘       └───┘     └───┘      └─────┘")
+  "┌───┐       ┌───┐     ┌───┐      ┌─────┐\n│   │       │   │     │   │      │     │\n│ A ├─first▶│ B ├────▶│ C ├slow┄▶│ End │\n│   │       │   │     │   │      │     │\n└───┘       └───┘     └───┘      └─────┘")
 
 (ert-deftest bm-test-golden-lr-labels ()
   "edge labels on horizontal edges, dotted tail (LR)."
@@ -449,7 +458,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-multi-amp
-  "┌─────┐     ┌───┐\n│     │     │   │\n│  A  │     │ B │\n│     │     │   │\n└──┬──┘     └─┬─┘\n   │          │  \n   │          │  \n   ├──────────┤  \n   │          │  \n   ↓          ↓  \n┌─────┐     ┌───┐\n│     │     │   │\n│  C  │     │ D │\n│     │     │   │\n└──┬──┘     └───┘\n   │             \n   │             \n   │             \n   │             \n   ↓             \n┌─────┐          \n│     │          \n│ End │          \n│     │          \n└─────┘          ")
+  "┌─────┐     ┌───┐\n│     │     │   │\n│  A  │     │ B │\n│     │     │   │\n└──┬──┘     └─┬─┘\n   │          │  \n   │          │  \n   ├──────────┤  \n   │          │  \n   ▼          ▼  \n┌─────┐     ┌───┐\n│     │     │   │\n│  C  │     │ D │\n│     │     │   │\n└──┬──┘     └───┘\n   │             \n   │             \n   │             \n   │             \n   ▼             \n┌─────┐          \n│     │          \n│ End │          \n│     │          \n└─────┘          ")
 
 (ert-deftest bm-test-golden-multi-amp ()
   "A & B --> C & D node groups (TD)."
@@ -459,7 +468,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-multi-root
-  "┌───────┐     ┌───────┐\n│       │     │       │\n│ Alpha │     │ Gamma │\n│       │     │       │\n└───┬───┘     └───┬───┘\n    │             │    \n    │             │    \n    │             │    \n    │             │    \n    ↓             ↓    \n┌───────┐     ┌───────┐\n│       │     │       │\n│  Beta │     │ Delta │\n│       │     │       │\n└───────┘     └───────┘")
+  "┌───────┐     ┌───────┐\n│       │     │       │\n│ Alpha │     │ Gamma │\n│       │     │       │\n└───┬───┘     └───┬───┘\n    │             │    \n    │             │    \n    │             │    \n    │             │    \n    ▼             ▼    \n┌───────┐     ┌───────┐\n│       │     │       │\n│  Beta │     │ Delta │\n│       │     │       │\n└───────┘     └───────┘")
 
 (ert-deftest bm-test-golden-multi-root ()
   "two disconnected subgraphs: multi-root placement (TD)."
@@ -469,7 +478,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-multiline
-  "┌───────┐     ┌───┐\n│       │     │   │\n│       │     │   │\n│ line1 ├────→│ x │\n│ line2 │     │   │\n│       │     │   │\n└───────┘     └───┘")
+  "┌───────┐     ┌───┐\n│       │     │   │\n│       │     │   │\n│ line1 ├────▶│ x │\n│ line2 │     │   │\n│       │     │   │\n└───────┘     └───┘")
 
 (ert-deftest bm-test-golden-multiline ()
   "two-line label via <br/> (LR)."
@@ -479,7 +488,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-parallel
-  "┌───────┐              \n│       │              \n│ Start │              \n│       │              \n└───────┘              \n    │                  \n    │                  \n    ├─────────────┐    \n    │             │    \n    ↓             ↓    \n┌───────┐     ┌───────┐\n│       │     │       │\n│  Left │     │ Right │\n│       │     │       │\n└───┬───┘     └───┬───┘\n    │             │    \n    │             │    \n    ├─────────────┘    \n    │                  \n    ↓                  \n┌───────┐              \n│       │              \n│  Join │              \n│       │              \n└───────┘              ")
+  "┌───────┐              \n│       │              \n│ Start │              \n│       │              \n└───────┘              \n    │                  \n    │                  \n    ├─────────────┐    \n    │             │    \n    ▼             ▼    \n┌───────┐     ┌───────┐\n│       │     │       │\n│  Left │     │ Right │\n│       │     │       │\n└───┬───┘     └───┬───┘\n    │             │    \n    │             │    \n    ├─────────────┘    \n    │                  \n    ▼                  \n┌───────┐              \n│       │              \n│  Join │              \n│       │              \n└───────┘              ")
 
 (ert-deftest bm-test-golden-parallel ()
   "parallel branches merging into one node; bundling (TD)."
@@ -489,7 +498,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-rl-flow
-  "┌─────┐     ◇─────◇     ┌───────┐\n│     │     │     │     │       │\n│ One ├────→│ Two ├────→│ Three │\n│     │     │     │     │       │\n└─────┘     ◇─────◇     └───────┘")
+  "┌─────┐     ◇─────◇     ┌───────┐\n│     │     │     │     │       │\n│ One ├────▶│ Two ├────▶│ Three │\n│     │     │     │     │       │\n└─────┘     ◇─────◇     └───────┘")
 
 (ert-deftest bm-test-golden-rl-flow ()
   "RL direction renders exactly as LR (matches TS)."
@@ -499,7 +508,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-selfloop
-  "┌──────┐  \n│      │  \n│ Loop │←┐\n│      │ │\n└───┬──┘ │\n    │    │\n    │    │\n    ├────┘\n    │     \n    ↓     \n┌──────┐  \n│      │  \n│ Next │  \n│      │  \n└──────┘  ")
+  "┌──────┐  \n│      │  \n│ Loop │◀┐\n│      │ │\n└───┬──┘ │\n    │    │\n    │    │\n    ├────┘\n    │     \n    ▼     \n┌──────┐  \n│      │  \n│ Next │  \n│      │  \n└──────┘  ")
 
 (ert-deftest bm-test-golden-selfloop ()
   "self loop plus a forward edge (TD)."
@@ -509,7 +518,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-shapes-lr
-  "┌───────────┐     ╭─────────╮     ◇─────────◇      (──────────)     ◯────────◯\n│           │     │         │     │         │      │          │     │        │\n│ Rectangle ├────→│ Rounded ├────→│ Diamond ├─────→│ Stadium  ├────→│ Circle │\n│           │     │         │     │         │      │          │     │        │\n└───────────┘     ╰─────────╯     ◇─────────◇      (──────────)     ◯────────◯")
+  "┌───────────┐     ╭─────────╮     ◇─────────◇      (──────────)     ◯────────◯\n│           │     │         │     │         │      │          │     │        │\n│ Rectangle ├────▶│ Rounded ├────▶│ Diamond ├─────▶│ Stadium  ├────▶│ Circle │\n│           │     │         │     │         │      │          │     │        │\n└───────────┘     ╰─────────╯     ◇─────────◇      (──────────)     ◯────────◯")
 
 (ert-deftest bm-test-golden-shapes-lr ()
   "five basic shapes chained (LR)."
@@ -519,7 +528,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-simple-td
-  "┌─────────┐\n│         │\n│  Start  │\n│         │\n└────┬────┘\n     │     \n     │     \n     │     \n     │     \n     ↓     \n┌─────────┐\n│         │\n│ Process │\n│         │\n└────┬────┘\n     │     \n     │     \n     │     \n     │     \n     ↓     \n┌─────────┐\n│         │\n│   End   │\n│         │\n└─────────┘")
+  "┌─────────┐\n│         │\n│  Start  │\n│         │\n└────┬────┘\n     │     \n     │     \n     │     \n     │     \n     ▼     \n┌─────────┐\n│         │\n│ Process │\n│         │\n└────┬────┘\n     │     \n     │     \n     │     \n     │     \n     ▼     \n┌─────────┐\n│         │\n│   End   │\n│         │\n└─────────┘")
 
 (ert-deftest bm-test-golden-simple-td ()
   "vertical chain (TD)."
@@ -539,7 +548,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-styles
-  "┌────────┐                   \n│        │                   \n│ Solid  │                   \n│        │                   \n└────────┘                   \n     │                       \n     │                       \n     ├────────────────┐      \n     │                │      \n     ↓                │      \n┌────────┐     ┌────────────┐\n│        │     │            │\n│ Dotted │     │ Plain line │\n│        │     │            │\n└────┬───┘     └────────────┘\n     ┆                       \n     ┆                       \n     ┆                       \n     ┆                       \n     ↓                       \n┌────────┐                   \n│        │                   \n│ Thick  │                   \n│        │                   \n└────┬───┘                   \n     ┃                       \n     ┃                       \n     ┃                       \n     ┃                       \n     ↓                       \n┌────────┐                   \n│        │                   \n│  Done  │                   \n│        │                   \n└────────┘                   ")
+  "┌────────┐                   \n│        │                   \n│ Solid  │                   \n│        │                   \n└────────┘                   \n     │                       \n     │                       \n     ├────────────────┐      \n     │                │      \n     ▼                │      \n┌────────┐     ┌────────────┐\n│        │     │            │\n│ Dotted │     │ Plain line │\n│        │     │            │\n└────┬───┘     └────────────┘\n     ┆                       \n     ┆                       \n     ┆                       \n     ┆                       \n     ▼                       \n┌────────┐                   \n│        │                   \n│ Thick  │                   \n│        │                   \n└────┬───┘                   \n     ┃                       \n     ┃                       \n     ┃                       \n     ┃                       \n     ▼                       \n┌────────┐                   \n│        │                   \n│  Done  │                   \n│        │                   \n└────────┘                   ")
 
 (ert-deftest bm-test-golden-styles ()
   "solid, dotted, thick and open edges (TD)."
@@ -549,7 +558,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-textarrow
-  "┌───────┐             \n│       │             \n│ Start ├━━━━━━━━━┐   \n│       │         ┃   \n└───┬───┘       sure  \n    │             ┃   \n   yes            ┃   \n    │             ┃   \n    │             ┃   \n    ↓             ↓   \n┌───────┐     ┌──────┐\n│       │     │      │\n│   Go  │     │ Rush │\n│       │     │      │\n└───┬───┘     └──────┘\n    ┆                 \n  maybe               \n    ┆                 \n    ┆                 \n    ↓                 \n┌───────┐             \n│       │             \n│  Wait │             \n│       │             \n└───────┘             ")
+  "┌───────┐             \n│       │             \n│ Start ├━━━━━━━━━┐   \n│       │         ┃   \n└───┬───┘       sure  \n    │             ┃   \n   yes            ┃   \n    │             ┃   \n    │             ┃   \n    ▼             ▼   \n┌───────┐     ┌──────┐\n│       │     │      │\n│   Go  │     │ Rush │\n│       │     │      │\n└───┬───┘     └──────┘\n    ┆                 \n  maybe               \n    ┆                 \n    ┆                 \n    ▼                 \n┌───────┐             \n│       │             \n│  Wait │             \n│       │             \n└───────┘             ")
 
 (ert-deftest bm-test-golden-textarrow ()
   "inline-text arrows in all three styles (TD)."
@@ -559,7 +568,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-thick-bundle
-  "┌──────┐              \n│      │              \n│ Src  │              \n│      │              \n└──────┘              \n    ┃                 \n    ┃                 \n    ├━━━━━━━━━━━━┐    \n    ┃            ┃    \n    ↓            ↓    \n┌──────┐     ┌───────┐\n│      │     │       │\n│ Left │     │ Right │\n│      │     │       │\n└───┬──┘     └───┬───┘\n    ┃            ┃    \n    ┃            ┃    \n    ├━━━━━━━━━━━━┘    \n    ┃                 \n    ↓                 \n┌──────┐              \n│      │              \n│ Join │              \n│      │              \n└──────┘              ")
+  "┌──────┐              \n│      │              \n│ Src  │              \n│      │              \n└──────┘              \n    ┃                 \n    ┃                 \n    ├━━━━━━━━━━━━┐    \n    ┃            ┃    \n    ▼            ▼    \n┌──────┐     ┌───────┐\n│      │     │       │\n│ Left │     │ Right │\n│      │     │       │\n└───┬──┘     └───┬───┘\n    ┃            ┃    \n    ┃            ┃    \n    ├━━━━━━━━━━━━┘    \n    ┃                 \n    ▼                 \n┌──────┐              \n│      │              \n│ Join │              \n│      │              \n└──────┘              ")
 
 (ert-deftest bm-test-golden-thick-bundle ()
   "unlabelled thick edges bundle both ways; double-line chars (TD)."
@@ -569,7 +578,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-thick-bend
-  "┌───────┐              \n│       │              \n│  Top  │              \n│       │              \n└───┬───┘              \n    ┃                  \n    ┃                  \n    ┃                  \n    ┃                  \n    ↓                  \n◇───────◇              \n│       │              \n│ Check ├━━━━━━━━━┐    \n│       │         ┃    \n◇───┬───◇        bad   \n    ┃             ┃    \n   ok             ┃    \n    ┃             ┃    \n    ┃             ┃    \n    ↓             ↓    \n┌───────┐     ┌───────┐\n│       │     │       │\n│  Left │     │ Right │\n│       │     │       │\n└───────┘     └───────┘")
+  "┌───────┐              \n│       │              \n│  Top  │              \n│       │              \n└───┬───┘              \n    ┃                  \n    ┃                  \n    ┃                  \n    ┃                  \n    ▼                  \n◇───────◇              \n│       │              \n│ Check ├━━━━━━━━━┐    \n│       │         ┃    \n◇───┬───◇        bad   \n    ┃             ┃    \n   ok             ┃    \n    ┃             ┃    \n    ┃             ┃    \n    ▼             ▼    \n┌───────┐     ┌───────┐\n│       │     │       │\n│  Left │     │ Right │\n│       │     │       │\n└───────┘     └───────┘")
 
 (ert-deftest bm-test-golden-thick-bend ()
   "thick edges with labels and a branch (TD)."
@@ -579,7 +588,7 @@ lines, black pointers, diagonal triangles, or unsupported markers."
 
 
 (defconst bm-test--golden-cjk
-  "┌──────┐     ┌──────────┐     ┌──────┐\n│      │     │          │     │      │\n│ 开始 ├────→│ 处理过程 ├────→│ 结束 │\n│      │     │          │     │      │\n└──────┘     └──────────┘     └──────┘")
+  "┌──────┐     ┌──────────┐     ┌──────┐\n│      │     │          │     │      │\n│ 开始 ├────▶│ 处理过程 ├────▶│ 结束 │\n│      │     │          │     │      │\n└──────┘     └──────────┘     └──────┘")
 
 (ert-deftest bm-test-golden-cjk ()
   "CJK wide-glyph absorption and border alignment (safe profile)."
@@ -646,7 +655,7 @@ again restores the source."
         (should (stringp disp))
         (should (string-match-p "┌" disp))
         (should (string-match-p "Alpha" disp))
-        (should (string-match-p "→" disp))))
+        (should (string-match-p "▶" disp))))
     ;; point was parked on the overlay start, second toggle restores
     (beautiful-mermaid-org-toggle)
     (should (null (bm-test--art-overlays)))))

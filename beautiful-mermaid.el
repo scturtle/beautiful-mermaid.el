@@ -147,12 +147,17 @@ set (see `bm-arrow-style')."
   "Padding between a node label and its box border, in cells."
   :type 'natnum)
 
-(defcustom bm-arrow-style 'arrow
-  "Arrowhead style used by the `safe' char profile.
+(defcustom bm-arrow-style 'triangle
+  "Arrowhead style (applies to both char profiles).
 
-`arrow' uses thin arrows (→ ← ↑ ↓ ↖ ↗ ↘ ↙).
-`triangle' uses solid triangles (▶ ◀ ▲ ▼)."
-  :type '(choice (const arrow) (const triangle)))
+The TypeScript renderer draws ►◄ (U+25BA/25C4) and ◤◥◣◢ — none of
+which are in the covered font set.  The replacements stay in the
+solid-arrow family where the font allows it:
+
+`triangle' (default) uses ▶ ◀ ▲ ▼; diagonal attachments fall back
+to thin arrows ↖ ↗ ↘ ↙ (no solid diagonals in the covered set).
+`arrow' uses thin arrows in all eight directions (→ ← ↑ ↓ ↖ ↗ ↘ ↙)."
+  :type '(choice (const triangle) (const arrow)))
 
 
 ;;; ============================ Data structures ============================

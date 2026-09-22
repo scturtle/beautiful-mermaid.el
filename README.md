@@ -13,7 +13,7 @@ art — directly in Emacs, with **zero dependencies** and in a **single file**.
     │                 
     │                 
     │                 
-    ↓                 
+    ▼                 
 ◊───────◊             
 │       │             
 │ Check ├─────────┐   
@@ -23,7 +23,7 @@ art — directly in Emacs, with **zero dependencies** and in a **single file**.
    yes            │   
     │             │   
     │             │   
-    ↓             ↓   
+    ▼             ▼   
 ┌───────┐     ┌──────┐
 │       │     │      │
 │   Go  │     │ Fix  │
@@ -159,7 +159,7 @@ plain org text:
 | Variable | Default | Meaning |
 |---|---|---|
 | `bm-char-profile` | `safe` | `safe` sticks to widely-covered glyphs; `full` uses every character the TypeScript renderer uses |
-| `bm-arrow-style` | `arrow` | `arrow` draws thin arrows `→←↑↓↖↗↘↙`; `triangle` draws solid triangles `▲▼◀▶` |
+| `bm-arrow-style` | `triangle` | `triangle` draws solid triangles `▶◀▲▼` (diagonals fall back to thin `↖↗↘↙`); `arrow` draws thin arrows in all directions |
 | `bm-padding-x` / `bm-padding-y` | 5 | Space between grid blocks |
 | `bm-box-padding` | 1 | Blank cells around the label inside a box |
 | `beautiful-mermaid-org-languages` | `("mermaid" "flowchart")` | Src-block languages the org toggle handles |
