@@ -67,23 +67,35 @@ Unsupported directives are ignored rather than rejected.
 
 ### Manual
 
+```sh
+git clone https://github.com/scturtle/beautiful-mermaid.el.git
+```
+
 ```elisp
 (add-to-list 'load-path "/path/to/beautiful-mermaid.el")
 (require 'beautiful-mermaid)
 ```
 
-### use-package
+### use-package (Emacs 29+)
 
 ```elisp
 (use-package beautiful-mermaid
-  :load-path "~/path/to/beautiful-mermaid.el"
+  :vc (:url "https://github.com/scturtle/beautiful-mermaid.el" :rev :newest)
   :bind (:map org-mode-map
               ("C-c C-x M-m" . beautiful-mermaid-org-toggle)))
 ```
 
 ### Straight / elpaca
 
-Point your favorite package manager at this repository.
+```elisp
+;; straight.el
+(straight-use-package
+ '(beautiful-mermaid :type git
+   :url "https://github.com/scturtle/beautiful-mermaid.el"))
+
+;; elpaca
+(elpaca ( :host github :repo "scturtle/beautiful-mermaid.el"))
+```
 
 ## Usage
 

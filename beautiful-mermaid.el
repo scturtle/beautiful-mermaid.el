@@ -5,6 +5,7 @@
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: tools, diagrams, mermaid, ascii
+;; URL: https://github.com/scturtle/beautiful-mermaid.el
 ;; SPDX-License-Identifier: MIT
 
 ;; This file is a port of the ASCII renderer in the TypeScript
